@@ -270,6 +270,12 @@ p { margin: 0 0 var(--space-2); }
   object-fit: cover;
   z-index: -2;
 }
+/* Second copy of the hero clip that JS fades in and out to crossfade the loop */
+.hero-bg.is-fader {
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out;
+}
+.hero-bg.is-fader.is-shown { opacity: 1; }
 
 /* Pause/play for the background video; reuses the reel button's icon styles */
 .hero-toggle {
