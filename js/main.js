@@ -50,14 +50,16 @@
   const heroToggle = document.getElementById('hero-toggle');
   let heroUserPaused = false;
 
-  // Seamless loop: a second copy of the clip sits on top and crossfades in as the first
-  // nears the end, then fades back out on the next lap. data-end trims the clip (seconds,
-  // e.g. before a scene cut) and data-rate slows it down.
-  const FADE_S = 1.2; // keep in sync with the .hero-bg.is-fader transition
+  // Seamless loop: two copies of the clip take turns. As the playing copy nears the end, the
+  // other restarts underneath, moves on top and fades in once it has a fresh frame, so the
+  // layer below is always a live video and the page background never shows through.
+  // data-end trims the clip (seconds, e.g. before a scene cut) and data-rate slows it down.
+  const FADE_S = 1.2;
+  const SEEK_LEAD_S = 0.3; // media time allowed for the incoming copy to rewind before fading
   const heroRate = parseFloat(heroVideo.dataset.rate) || 1;
   const fader = heroVideo.cloneNode();
   ['id', 'autoplay', 'loop', 'poster'].forEach((a) => fader.removeAttribute(a));
-  fader.classList.add('is-fader');
+  fader.classList.add('is-under');
   fader.preload = 'none';
   heroVideo.removeAttribute('loop');
   heroVideo.after(fader);
@@ -74,20 +76,31 @@
   const heroEnd = () => Math.min(parseFloat(heroVideo.dataset.end) || Infinity, heroVideo.duration || Infinity);
 
   const crossfade = () => {
+    const outgoing = heroLayers[active];
+    const incoming = heroLayers[1 - active];
+    // Copy not loaded yet (slow connection): plain loop rather than fading in an empty layer
+    if (incoming.readyState < 2) { outgoing.currentTime = 0; return; }
     fading = true;
     active = 1 - active;
-    const incoming = heroLayers[active];
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      incoming.play().catch(() => {});
+      outgoing.classList.add('is-under');
+      incoming.classList.remove('is-under');
+      incoming.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_S * 1000, easing: 'ease-in-out' });
+      setTimeout(() => { outgoing.pause(); fading = false; }, FADE_S * 1000);
+    };
+    incoming.addEventListener('seeked', start, { once: true });
+    setTimeout(start, 600); // in case the browser skips 'seeked' for a no-op rewind
     incoming.currentTime = 0;
-    incoming.play().catch(() => {});
-    // The copy is on top: fading it in covers the first, fading it out reveals it
-    fader.classList.toggle('is-shown', active === 1);
-    setTimeout(() => { heroLayers[1 - active].pause(); fading = false; }, FADE_S * 1000);
   };
 
   const onHeroTime = (v) => {
     const end = heroEnd();
     if (v !== heroLayers[active]) { if (v.currentTime >= end) v.pause(); return; }
-    if (!fading && v.currentTime >= end - FADE_S * heroRate) crossfade();
+    if (!fading && v.currentTime >= end - FADE_S * heroRate - SEEK_LEAD_S) crossfade();
   };
   // Per-frame check where supported so the trimmed-off footage never shows; timeupdate is the coarse backup
   heroLayers.forEach((v) => {
