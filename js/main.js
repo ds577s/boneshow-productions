@@ -50,6 +50,17 @@
   const heroToggle = document.getElementById('hero-toggle');
   let heroUserPaused = false;
 
+  // Optional trim + slow-mo: data-end loops back before a scene cut, data-rate sets the speed
+  const heroEnd = parseFloat(heroVideo.dataset.end) || Infinity;
+  heroVideo.defaultPlaybackRate = heroVideo.playbackRate = parseFloat(heroVideo.dataset.rate) || 1;
+  const heroLoop = (t) => { if (t >= heroEnd) heroVideo.currentTime = 0; };
+  // Per-frame check where supported so the cut never flashes; timeupdate is the coarse backup
+  if ('requestVideoFrameCallback' in heroVideo) {
+    const tick = (now, meta) => { heroLoop(meta.mediaTime); heroVideo.requestVideoFrameCallback(tick); };
+    heroVideo.requestVideoFrameCallback(tick);
+  }
+  heroVideo.addEventListener('timeupdate', () => heroLoop(heroVideo.currentTime));
+
   const setHero = (playing) => {
     heroToggle.setAttribute('aria-pressed', String(playing));
     heroToggle.setAttribute('aria-label', `${playing ? 'Pause' : 'Play'} background video`);
