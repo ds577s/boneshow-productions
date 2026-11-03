@@ -111,11 +111,25 @@
     v.addEventListener('timeupdate', () => onHeroTime(v));
   });
 
+  // Some browsers block autoplay (battery saver, Low Power Mode, strict settings). Show the
+  // still and the play button, then try again on the visitor's first tap, click or key press.
+  const GESTURES = ['pointerup', 'touchend', 'keydown'];
+  const retryOnGesture = () => {
+    const retry = () => {
+      GESTURES.forEach((e) => window.removeEventListener(e, retry));
+      if (!heroUserPaused) setHero(true);
+    };
+    GESTURES.forEach((e) => window.addEventListener(e, retry, { passive: true }));
+  };
+
   const setHero = (playing) => {
     heroToggle.setAttribute('aria-pressed', String(playing));
     heroToggle.setAttribute('aria-label', `${playing ? 'Pause' : 'Play'} background video`);
     if (playing) {
-      heroLayers[active].play().catch(() => setHero(false));
+      heroLayers[active].play().catch((err) => {
+        // AbortError only means a pause or reload cut this attempt short, so there's nothing to undo
+        if (err.name === 'NotAllowedError') { setHero(false); retryOnGesture(); }
+      });
       if (fading) heroLayers[1 - active].play().catch(() => {});
     } else {
       heroLayers.forEach((v) => v.pause());
